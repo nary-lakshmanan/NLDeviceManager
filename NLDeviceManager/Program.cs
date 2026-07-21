@@ -19,6 +19,15 @@ while (running)
 
     string? choice = Console.ReadLine();
 
+    // A null result means the input stream reached end-of-file (e.g. piped
+    // input or a closed console). Treat it as a request to exit instead of
+    // looping forever on the "invalid choice" branch.
+    if (choice is null)
+    {
+        Console.WriteLine("\nNo more input. Exiting...");
+        break;
+    }
+
     switch (choice)
     {
         case "1":
@@ -39,11 +48,38 @@ while (running)
     if (running)
     {
         Console.WriteLine("\nPress any key to return to menu...");
-        Console.ReadKey();
+        if (Console.IsInputRedirected)
+        {
+            Console.ReadLine();
+        }
+        else
+        {
+            Console.ReadKey();
+        }
     }
 }
 
-static void ListConnectedUsbDevices()
+return Environment.ExitCode;
+
+// Writes an error to standard error, including full exception details so that
+// diagnostics (stack trace, inner exceptions) are not lost, and flags the
+// process as failed so callers/scripts can detect it via the exit code.
+static void ReportError(string message, Exception? ex = null)
+{
+    Console.Error.WriteLine(message);
+    if (ex is not null)
+    {
+        Console.Error.WriteLine(ex);
+    }
+
+    // Preserve a non-zero exit code once an error has occurred.
+    if (Environment.ExitCode == 0)
+    {
+        Environment.ExitCode = 1;
+    }
+}
+
+static bool ListConnectedUsbDevices()
 {
     Console.WriteLine("\nConnected USB Devices:");
     Console.WriteLine("================================");
@@ -57,14 +93,17 @@ static void ListConnectedUsbDevices()
 
             foreach (ManagementObject device in devices)
             {
-                count++;
-                string? name = device["Name"]?.ToString();
-                string? deviceId = device["DeviceID"]?.ToString();
-                string? status = device["Status"]?.ToString();
+                using (device)
+                {
+                    count++;
+                    string? name = device["Name"]?.ToString();
+                    string? deviceId = device["DeviceID"]?.ToString();
+                    string? status = device["Status"]?.ToString();
 
-                Console.WriteLine($"\n[{count}] {name}");
-                Console.WriteLine($"    Device ID: {deviceId}");
-                Console.WriteLine($"    Status: {status}");
+                    Console.WriteLine($"\n[{count}] {name}");
+                    Console.WriteLine($"    Device ID: {deviceId}");
+                    Console.WriteLine($"    Status: {status}");
+                }
             }
 
             if (count == 0)
@@ -76,14 +115,22 @@ static void ListConnectedUsbDevices()
                 Console.WriteLine($"\nTotal USB devices found: {count}");
             }
         }
+
+        return true;
+    }
+    catch (ManagementException ex)
+    {
+        ReportError($"Error querying USB devices via WMI: {ex.Message}", ex);
+        return false;
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Error enumerating USB devices: {ex.Message}");
+        ReportError($"Error enumerating USB devices: {ex.Message}", ex);
+        return false;
     }
 }
 
-static void ListConnectedPrinters()
+static bool ListConnectedPrinters()
 {
     Console.WriteLine("\n================================");
     Console.WriteLine("Connected Printers:");
@@ -107,79 +154,40 @@ static void ListConnectedPrinters()
         if (count == 0)
         {
             Console.WriteLine("No printers found.");
+            return true;
         }
-        else
+
+        Console.WriteLine($"\nTotal printers found: {count}");
+
+        // Ask if user wants to set a default printer
+        Console.Write("\nWould you like to set a default printer? (y/n): ");
+        string? response = Console.ReadLine();
+
+        if (response?.Trim().ToLower() == "y")
         {
-            Console.WriteLine($"\nTotal printers found: {count}");
+            Console.Write($"Enter printer number (1-{count}) to set as default: ");
+            string? input = Console.ReadLine();
 
-            // Ask if user wants to set a default printer
-            Console.Write("\nWould you like to set a default printer? (y/n): ");
-            string? response = Console.ReadLine();
-
-            if (response?.Trim().ToLower() == "y")
+            if (int.TryParse(input, out int printerNumber) && printerNumber >= 1 && printerNumber <= count)
             {
-                Console.Write($"Enter printer number (1-{count}) to set as default: ");
-                string? input = Console.ReadLine();
-
-                if (int.TryParse(input, out int printerNumber) && printerNumber >= 1 && printerNumber <= count)
-                {
-                    string selectedPrinter = printerList[printerNumber - 1];
-                    SetDefaultPrinterByNumber(selectedPrinter);
-                }
-                else
-                {
-                    Console.WriteLine("Invalid printer number.");
-                }
+                string selectedPrinter = printerList[printerNumber - 1];
+                return SetDefaultPrinterByNumber(selectedPrinter);
             }
+
+            ReportError($"Invalid printer number: '{input}'.");
+            return false;
         }
+
+        return true;
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Error listing printers: {ex.Message}");
+        ReportError($"Error listing printers: {ex.Message}", ex);
+        return false;
     }
 }
 
-static void SetDefaultPrinter(string printerName)
-{
-    Console.WriteLine($"\nAttempting to set '{printerName}' as default printer...");
-
-    try
-    {
-        // Verify the printer exists
-        bool printerExists = false;
-        foreach (string printer in PrinterSettings.InstalledPrinters)
-        {
-            if (printer.Equals(printerName, StringComparison.OrdinalIgnoreCase))
-            {
-                printerExists = true;
-                printerName = printer; // Use exact casing
-                break;
-            }
-        }
-
-        if (!printerExists)
-        {
-            Console.WriteLine($"Error: Printer '{printerName}' not found.");
-            return;
-        }
-
-        // Use Windows API to set default printer
-        if (SetDefaultPrinterWin32(printerName))
-        {
-            Console.WriteLine($"Successfully set '{printerName}' as the default printer.");
-        }
-        else
-        {
-            Console.WriteLine($"Failed to set default printer. Error code: {Marshal.GetLastWin32Error()}");
-        }
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Error setting default printer: {ex.Message}");
-    }
-}
-
-static void SetDefaultPrinterByNumber(string printerName)
+static bool SetDefaultPrinterByNumber(string printerName)
 {
     Console.WriteLine($"\nAttempting to set '{printerName}' as default printer...");
 
@@ -189,18 +197,20 @@ static void SetDefaultPrinterByNumber(string printerName)
         if (SetDefaultPrinterWin32(printerName))
         {
             Console.WriteLine($"Successfully set '{printerName}' as the default printer.");
+            return true;
         }
-        else
-        {
-            Console.WriteLine($"Failed to set default printer. Error code: {Marshal.GetLastWin32Error()}");
-        }
+
+        int errorCode = Marshal.GetLastWin32Error();
+        ReportError($"Failed to set default printer. Error code: {errorCode}",
+            new System.ComponentModel.Win32Exception(errorCode));
+        return false;
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Error setting default printer: {ex.Message}");
+        ReportError($"Error setting default printer: {ex.Message}", ex);
+        return false;
     }
 }
 
 [DllImport("winspool.drv", CharSet = CharSet.Auto, SetLastError = true, EntryPoint = "SetDefaultPrinter")]
 static extern bool SetDefaultPrinterWin32(string printerName);
-
