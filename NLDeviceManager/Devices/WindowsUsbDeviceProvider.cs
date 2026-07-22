@@ -16,10 +16,13 @@ public sealed class WindowsUsbDeviceProvider : IUsbDeviceProvider
         using var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_PnPEntity WHERE PNPClass='USB'");
         foreach (ManagementObject device in searcher.Get())
         {
-            results.Add(new UsbDevice(
-                device["Name"]?.ToString(),
-                device["DeviceID"]?.ToString(),
-                device["Status"]?.ToString()));
+            using (device)
+            {
+                results.Add(new UsbDevice(
+                    device["Name"]?.ToString(),
+                    device["DeviceID"]?.ToString(),
+                    device["Status"]?.ToString()));
+            }
         }
 
         return results;

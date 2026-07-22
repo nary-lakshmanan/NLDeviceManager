@@ -36,6 +36,23 @@ public sealed class DeviceManagerService
     }
 
     /// <summary>
+    /// Whether the most recent operation completed successfully. It is false
+    /// when a provider threw or an operation could not be completed (printer
+    /// not found, or the OS refused to set the default printer). Rendering
+    /// methods still return user-facing text on failure; this lets the caller
+    /// distinguish success from failure and set a non-zero exit code.
+    /// </summary>
+    public bool LastOperationSucceeded { get; private set; } = true;
+
+    /// <summary>
+    /// The exception thrown by the most recent operation, if any. Provider
+    /// exceptions are swallowed into the rendered output (only the message is
+    /// shown to the user); this preserves the full exception so the caller can
+    /// log the stack trace and inner exceptions instead of losing them.
+    /// </summary>
+    public Exception? LastError { get; private set; }
+
+    /// <summary>
     /// Maps a raw menu selection to the action it represents.
     /// </summary>
     public static MenuAction ParseMenuChoice(string? choice) => choice switch
@@ -51,6 +68,8 @@ public sealed class DeviceManagerService
     /// </summary>
     public string RenderUsbDevices()
     {
+        ResetLastOperation();
+
         var builder = new StringBuilder();
         builder.AppendLine("Connected USB Devices:");
         builder.Append("================================");
@@ -62,6 +81,7 @@ public sealed class DeviceManagerService
         }
         catch (Exception ex)
         {
+            Fail(ex);
             builder.AppendLine();
             builder.Append($"Error enumerating USB devices: {ex.Message}");
             return builder.ToString();
@@ -97,6 +117,8 @@ public sealed class DeviceManagerService
     /// </summary>
     public PrinterListing RenderPrinters()
     {
+        ResetLastOperation();
+
         var builder = new StringBuilder();
         builder.AppendLine("================================");
         builder.AppendLine("Connected Printers:");
@@ -109,6 +131,7 @@ public sealed class DeviceManagerService
         }
         catch (Exception ex)
         {
+            Fail(ex);
             builder.AppendLine();
             builder.Append($"Error listing printers: {ex.Message}");
             return new PrinterListing(builder.ToString(), Array.Empty<string>());
@@ -158,6 +181,8 @@ public sealed class DeviceManagerService
     /// </summary>
     public string SetDefaultPrinter(string printerName)
     {
+        ResetLastOperation();
+
         var builder = new StringBuilder();
         builder.Append($"Attempting to set '{printerName}' as default printer...");
 
@@ -176,6 +201,7 @@ public sealed class DeviceManagerService
 
             if (!printerExists)
             {
+                Fail();
                 builder.AppendLine();
                 builder.Append($"Error: Printer '{printerName}' not found.");
                 return builder.ToString();
@@ -186,6 +212,7 @@ public sealed class DeviceManagerService
         }
         catch (Exception ex)
         {
+            Fail(ex);
             builder.AppendLine();
             builder.Append($"Error setting default printer: {ex.Message}");
         }
@@ -199,6 +226,8 @@ public sealed class DeviceManagerService
     /// </summary>
     public string SetDefaultPrinterByNumber(string printerName)
     {
+        ResetLastOperation();
+
         var builder = new StringBuilder();
         builder.Append($"Attempting to set '{printerName}' as default printer...");
 
@@ -209,6 +238,7 @@ public sealed class DeviceManagerService
         }
         catch (Exception ex)
         {
+            Fail(ex);
             builder.AppendLine();
             builder.Append($"Error setting default printer: {ex.Message}");
         }
@@ -223,6 +253,19 @@ public sealed class DeviceManagerService
             return $"Successfully set '{printerName}' as the default printer.";
         }
 
+        Fail();
         return $"Failed to set default printer. Error code: {_printerProvider.GetLastError()}";
+    }
+
+    private void ResetLastOperation()
+    {
+        LastOperationSucceeded = true;
+        LastError = null;
+    }
+
+    private void Fail(Exception? error = null)
+    {
+        LastOperationSucceeded = false;
+        LastError = error;
     }
 }
