@@ -72,7 +72,7 @@ public sealed class DeviceManagerService
 
         var builder = new StringBuilder();
         builder.AppendLine("Connected USB Devices:");
-        builder.Append("================================");
+        builder.Append(ConsoleUi.Separator);
 
         IReadOnlyList<UsbDevice> devices;
         try
@@ -97,16 +97,7 @@ public sealed class DeviceManagerService
             builder.Append($"    Status: {device.Status}");
         }
 
-        builder.AppendLine();
-        if (devices.Count == 0)
-        {
-            builder.Append("No USB devices found.");
-        }
-        else
-        {
-            builder.AppendLine();
-            builder.Append($"Total USB devices found: {devices.Count}");
-        }
+        ConsoleUi.AppendCountSummary(builder, devices.Count, "USB devices");
 
         return builder.ToString();
     }
@@ -120,9 +111,9 @@ public sealed class DeviceManagerService
         ResetLastOperation();
 
         var builder = new StringBuilder();
-        builder.AppendLine("================================");
+        builder.AppendLine(ConsoleUi.Separator);
         builder.AppendLine("Connected Printers:");
-        builder.Append("================================");
+        builder.Append(ConsoleUi.Separator);
 
         IReadOnlyList<string> printers;
         try
@@ -145,16 +136,7 @@ public sealed class DeviceManagerService
             builder.Append($"[{i + 1}] {printer}{(isDefault ? " (Default)" : string.Empty)}");
         }
 
-        builder.AppendLine();
-        if (printers.Count == 0)
-        {
-            builder.Append("No printers found.");
-        }
-        else
-        {
-            builder.AppendLine();
-            builder.Append($"Total printers found: {printers.Count}");
-        }
+        ConsoleUi.AppendCountSummary(builder, printers.Count, "printers");
 
         return new PrinterListing(builder.ToString(), printers);
     }

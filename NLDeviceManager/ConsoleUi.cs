@@ -1,36 +1,34 @@
-﻿namespace NLDeviceManager;
+﻿using System.Text;
+
+namespace NLDeviceManager;
 
 /// <summary>
-/// Shared helpers for the console user interface (separators, banners and count summaries).
+/// Shared output-formatting helpers used by both the console entrypoint and the
+/// text rendered by <see cref="DeviceManagerService"/>.
 /// </summary>
 internal static class ConsoleUi
 {
+    /// <summary>
+    /// The horizontal rule used as a section separator throughout the UI.
+    /// </summary>
     public const string Separator = "================================";
 
-    public static void PrintSeparator() => Console.WriteLine(Separator);
-
     /// <summary>
-    /// Prints a title enclosed between two separator lines.
+    /// Appends a device/printer count summary: a leading blank line followed by
+    /// "No {label} found." when <paramref name="count"/> is zero, otherwise
+    /// "Total {label} found: {count}" (preceded by its own blank line).
     /// </summary>
-    public static void PrintBanner(string title)
+    public static void AppendCountSummary(StringBuilder builder, int count, string label)
     {
-        PrintSeparator();
-        Console.WriteLine(title);
-        PrintSeparator();
-    }
-
-    /// <summary>
-    /// Prints "No {label} found." when the count is zero, otherwise "Total {label} found: {count}".
-    /// </summary>
-    public static void PrintCountSummary(int count, string label)
-    {
+        builder.AppendLine();
         if (count == 0)
         {
-            Console.WriteLine($"No {label} found.");
+            builder.Append($"No {label} found.");
         }
         else
         {
-            Console.WriteLine($"\nTotal {label} found: {count}");
+            builder.AppendLine();
+            builder.Append($"Total {label} found: {count}");
         }
     }
 }
