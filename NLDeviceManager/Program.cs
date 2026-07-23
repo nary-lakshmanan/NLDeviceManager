@@ -31,11 +31,21 @@ static void RunWindows()
 
         string? choice = Console.ReadLine();
 
+        // Null means the input stream reached end-of-file (piped or closed
+        // input). Exit cleanly instead of looping forever on the invalid-choice
+        // branch or crashing on ReadKey below.
+        if (choice is null)
+        {
+            Console.WriteLine("\nNo more input. Exiting...");
+            break;
+        }
+
         switch (DeviceManagerService.ParseMenuChoice(choice))
         {
             case MenuAction.ListUsbDevices:
                 Console.WriteLine();
                 Console.WriteLine(service.RenderUsbDevices());
+                PropagateFailure(service);
                 break;
             case MenuAction.ListPrinters:
                 Console.WriteLine();
@@ -53,7 +63,14 @@ static void RunWindows()
         if (running)
         {
             Console.WriteLine("\nPress any key to return to menu...");
-            Console.ReadKey();
+            if (Console.IsInputRedirected)
+            {
+                Console.ReadLine();
+            }
+            else
+            {
+                Console.ReadKey();
+            }
         }
     }
 }
@@ -62,6 +79,7 @@ static void ListPrinters(DeviceManagerService service)
 {
     PrinterListing listing = service.RenderPrinters();
     Console.WriteLine(listing.Output);
+    PropagateFailure(service);
 
     if (listing.Printers.Count == 0)
     {
@@ -83,9 +101,31 @@ static void ListPrinters(DeviceManagerService service)
     {
         Console.WriteLine();
         Console.WriteLine(service.SetDefaultPrinterByNumber(listing.Printers[index]));
+        PropagateFailure(service);
     }
     else
     {
         Console.WriteLine("Invalid printer number.");
+    }
+}
+
+// Surfaces a failed operation: logs full exception detail to stderr (rather
+// than losing everything but the message) and sets a non-zero process exit
+// code so callers and scripts can detect that something went wrong.
+static void PropagateFailure(DeviceManagerService service)
+{
+    if (service.LastOperationSucceeded)
+    {
+        return;
+    }
+
+    if (service.LastError is not null)
+    {
+        Console.Error.WriteLine(service.LastError);
+    }
+
+    if (Environment.ExitCode == 0)
+    {
+        Environment.ExitCode = 1;
     }
 }
