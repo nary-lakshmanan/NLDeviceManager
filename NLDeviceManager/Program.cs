@@ -19,14 +19,14 @@ static void RunWindows()
     while (running)
     {
         Console.Clear();
-        Console.WriteLine("================================");
+        Console.WriteLine(ConsoleUi.Separator);
         Console.WriteLine("    Device Manager");
-        Console.WriteLine("================================");
+        Console.WriteLine(ConsoleUi.Separator);
         Console.WriteLine("\nPlease select an option:");
         Console.WriteLine("1. List Connected USB Devices");
         Console.WriteLine("2. List Connected Printers");
         Console.WriteLine("3. Exit");
-        Console.WriteLine("================================");
+        Console.WriteLine(ConsoleUi.Separator);
         Console.Write("\nEnter your choice (1-3): ");
 
         string? choice = Console.ReadLine();
